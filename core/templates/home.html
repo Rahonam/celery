@@ -1,0 +1,88 @@
+{% extends 'base.html' %} {% block content %}
+
+<h1>A guide for implementing celery, using django web framework</h1>
+<div class="container">
+    <ul>
+        <!-- Synchronous call start -->
+        <li>
+            <h3>Calling a heavy task Normally/Synchronously, without celery.</h3>
+            <a href="{% url 'generic_sync_task' %}" class="btn btn-success">Call Synchronously</a>
+            <h4>Observe the response time. This is not desirable.</h4>
+            <hr>
+            <p><b>in <i>task.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+from celery import shared_task
+import time
+
+#@shared_task decorator lets us create tasks
+#naming our task using name kwargs is a good practice
+
+@shared_task(name="heavyTask")
+def heavy_task():
+
+    #simulating a time consuming process
+    time.sleep(5)
+
+    return "executed!"
+                        </p></pre>
+            </div>
+            <p><b>in <i>views.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+from django.shortcuts import render
+from django.http import HttpResponse
+import time
+from .task import heavy_task
+
+#Below is a normal view/function calling heavy_task() normally/synchronously
+
+def generic_sync_task(request):
+    start = time.time()
+
+    heavy_task()
+    
+    message = "Response in {} seconds!".format(time.time() - start)
+    return HttpResponse(message)
+                        </p></pre>
+            </div>
+        </li>
+        <!-- Synchronous call ends -->
+
+        <!-- Asynchronous Call starts -->
+        <li>
+            <h3>Calling a heavy task Asynchronously, with celery.</h3>
+            <a href="{% url 'single_async_task' %}" class="btn btn-success">Call Asynchronously</a>
+            <h4>Observe the response time and compare it with Synchronous call(above).</h4>
+            <h4><b>delay()/apply_async()</b> send our heavy_task to celery. Celery executes it in background, while we get response instantly.</h4>
+            <hr>
+            <p><b>in <i>task.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#same as above in Synchronous call
+                        </p></pre>
+            </div>
+            <p><b>in <i>views.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#Now we're sending heavy_task() to celery using delay/apply_async
+#celery will consume/execute it asynchronously
+
+def single_async_task(request):
+    start = time.process_time()
+
+    #heavy_task is sent to celery
+    #and the execution control will shift to next line of code instantly
+    heavy_task.delay()
+
+    message = "Response in {} seconds!".format(time.process_time() - start)
+    return HttpResponse(message)
+                        </p></pre>
+            </div>
+        </li>
+        <!-- Asynchronous call ends -->
+
+    </ul>
+</div>
+
+{%endblock %}
