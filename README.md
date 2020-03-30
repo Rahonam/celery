@@ -90,22 +90,22 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 ```
--BROKER_URL is the address of our message broker, which will manage task messages.
--RESULT_BACKEND is the database for storing task results and status.
--ACCEPT_CONTENT is the list of allowed formats for storing results.
--TASK_SERIALIZER and RESULT_SERIALIZER specify the formats to which values will be parsed in order to interact with our message broker.
+- BROKER_URL is the address of our message broker, which will manage task messages.
+- RESULT_BACKEND is the database for storing task results and status.
+- ACCEPT_CONTENT is the list of allowed formats for storing results.
+- TASK_SERIALIZER and RESULT_SERIALIZER specify the formats to which values will be parsed in order to interact with our message broker.
 
 Note: we need to run rabbitmq before celery, celery will always look for a message broker on start.
 
 Steps to start servers:
 
 Once every thing setup as mentioned above
--Start Rabbitmq server
+- Start Rabbitmq server
 ```
 systemctl start rabbitmq-server
 systemctl status rabbitmq-server
 ```
--Start Celery worker
+- Start Celery worker
 `celery -A <PROJECT NAME> worker -l info`
--Start Flower (optional for real time monitoring)
+- Start Flower (optional for real time monitoring)
 `celery -A <PROJECT NAME> flower`
