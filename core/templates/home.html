@@ -1,13 +1,14 @@
 {% extends 'base.html' %} {% block content %}
 
 <h1>A guide for implementing celery, using django web framework</h1>
+<p>For setup refer readme file.</p>
 <div class="container">
     <ul>
         <!-- Synchronous call start -->
         <li>
             <h3>Calling a heavy task Normally/Synchronously, without celery.</h3>
             <a href="{% url 'generic_sync_task' %}" class="btn btn-success">Call Synchronously</a>
-            <h4>Observe the response time. This is not desirable.</h4>
+            <h4>Observe the response time. This is undesirable.</h4>
             <hr>
             <p><b>in <i>task.py</i></b></p>
             <div class="pre-scrollable">
@@ -16,7 +17,7 @@ from celery import shared_task
 import time
 
 #@shared_task decorator lets us create tasks
-#naming our task using name kwargs is a good practice
+#naming our task, using name kwargs, is a good practice
 
 @shared_task(name="heavyTask")
 def heavy_task():
@@ -48,6 +49,7 @@ def generic_sync_task(request):
             </div>
         </li>
         <!-- Synchronous call ends -->
+
 
         <!-- Asynchronous Call starts -->
         <li>
@@ -82,7 +84,284 @@ def single_async_task(request):
         </li>
         <!-- Asynchronous call ends -->
 
+
+        <!-- Task with link starts -->
+        <li>
+            <h3>Task having link.</h3>
+            <a href="{% url 'task_link' %}" class="btn btn-success">Call Task with Link</a>
+            <h4>Observe the celery logs. On successful execution, control is passed to another task(link)</h4>
+            <h4><b>link()</b> send control to another task.</h4>
+            <hr>
+            <p><b>in <i>task.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#add two integers
+@shared_task(name="AddNum", bind=True, trail=True)
+def add_num(self, num1, num2):
+    time.sleep(3)
+    sum=num1+num2
+    log.info("({}+{}) Sum: {}".format(num1, num2, sum))
+
+    return sum
+
+#Execute this on Task Success
+@shared_task(name="ExecuteOnSuccess", bind=True, trail=True)
+def execute_on_success(self, previous_result):
+    log.info("Current Task ID: {}".format(self.request.id))
+    log.info("Previous result: {}".format(previous_result))
+
+    return "Task Succeeded!"
+                        </p></pre>
+            </div>
+            <p><b>in <i>views.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#link and error link
+#link executes if the current Task executed successfully
+def task_link(request):
+    task = add_num.apply_async((4, 5), link=execute_on_success.s())
+
+    return HttpResponse("Task ID: {} </br> Observe the celery logs for task execution.".format(task.task_id))                    
+                        </p></pre>
+            </div>
+        </li>
+        <!-- Task with link ends -->
+
+
+        <!-- Task with link error starts -->
+        <li>
+            <h3>Task having link error.</h3>
+            <a href="{% url 'task_link_error' %}" class="btn btn-success">Call Task with Link error</a>
+            <h4>Observe the celery logs. On execution failure, control is passed to another task(link error)</h4>
+            <h4><b>link_error()</b> send control to another task.</h4>
+            <hr>
+            <p><b>in <i>task.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#Execute this on Task Failure
+@shared_task(name="ExecuteOnFailure", bind=True, trail=True)
+def execute_on_failure(self, previous_result):
+    log.info("Current Task ID: {}".format(self.request.id))
+    log.info("Previous exception: {}".format(previous_result))
+
+    return "Task Failed!"
+                        </p></pre>
+            </div>
+            <p><b>in <i>views.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#error link executes if the current Task execution failed
+#passing invalid str type argument "five" for failure
+def task_link_error(request):
+    task = add_num.apply_async((4, "five"), link_error=execute_on_failure.s())
+
+    return HttpResponse("Task ID: {} </br> Observe the celery logs for task execution.".format(task.task_id))
+                                           </p></pre>
+            </div>
+        </li>
+        <!-- Task with link error ends -->
+
+
+        <!-- Task with timeout starts -->
+        <li>
+            <h3>Task with timeout feature.</h3>
+            <a href="{% url 'time_out_task' %}" class="btn btn-success">Call Task with timeout</a>
+            <h4>Observe the celery logs. Execution stops, if it takes longer than specified time limit.</h4>
+            <h4><b>soft_time_limit=5</b> sets 5s execution time limit for task.</h4>
+            <hr>
+            <p><b>in <i>task.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#timeout occurs in this task
+#soft_time_limit allows to kill a time consuming task
+#we are handling with try-except to prevent kill
+@shared_task(name="TimeOut", bind=True, trail=True, soft_time_limit=5)
+def time_out(self):
+    try:
+        time.sleep(20)
+    except SoftTimeLimitExceeded:
+        log.info("Time limit exceeded!")
+                        </p></pre>
+            </div>
+            <p><b>in <i>views.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#time out will occur here
+def time_out_task(request):
+    task = time_out.apply_async()
+
+    return HttpResponse("Task ID: {} </br> Observe the celery logs for task execution.".format(task.task_id))
+                                                              </p></pre>
+            </div>
+        </li>
+        <!-- Task with timeout ends -->
+
+
+        <!-- Task with retry starts -->
+        <li>
+            <h3>Task with retry feature.</h3>
+            <a href="{% url 'retry_task_view' %}" class="btn btn-success">Call Task with retry</a>
+            <h4>Observe the celery logs. If there occurs any exception, execution will be retried.</h4>
+            <h4><b>retry()</b> executes the task once more, if max_retry(default is 3) limit is True.</h4>
+            <hr>
+            <p><b>in <i>task.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#retry allows task to be executed again
+#helpful for network based tasks
+@shared_task(name="RetryTask", bind=True, trail=True, soft_time_limit=3, default_retry_delay=3)
+def retry_task(self):
+    try:
+        time.sleep(5)
+    except SoftTimeLimitExceeded:
+        try:
+            raise self.retry()
+        except MaxRetriesExceededError:
+            log.info("Max retry exceeded!")
+                                            </p></pre>
+            </div>
+            <p><b>in <i>views.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#task retry will occur here
+def retry_task_view(request):
+    task = retry_task.apply_async()
+
+    return HttpResponse("Task ID: {} </br> Observe the celery logs for task execution.".format(task.task_id))
+                                                                              </p></pre>
+            </div>
+        </li>
+        <!-- Task with retry ends -->
+
+
+        <!-- Chain task starts -->
+        <li>
+            <h3>Calling Chain task.</h3>
+            <a href="{% url 'chain_task' %}" class="btn btn-success">Call Chain</a>
+            <h4>Observe the celery logs. Execution is sequential. Using <b>signature s()</b>, the return of one task become 1st argument of next task.</h4>
+            <h4><b>chain()</b> executes the task sequentially.</h4>
+            <hr>
+            <p><b>in <i>task.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#multiply two integers
+@shared_task(name="MultiplyNum", bind=True, trail=True)
+def multiply_num(self, num1, num2):
+    time.sleep(3)
+    multiply=num1*num2
+    log.info("({}*{}) Product: {}".format(num1, num2, multiply))
+
+    return multiply
+
+
+#divide two integers
+@shared_task(name="DivideNum", bind=True, trail=True)
+def divide_num(self, num1, num2):
+    time.sleep(3)
+    quotient=num1/num2
+    log.info("({}/{}) Quotient: {}".format(num1, num2, quotient))
+
+    return quotient
+                                                                </p></pre>
+            </div>
+            <p><b>in <i>views.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#chaining Task, execute sequentially
+#signature .s() allows to pass, return of previous, as 1st argument
+def chain_task(request):
+    task = chain(add_num.s(4, 5), multiply_num.s(7), divide_num.s(3)).apply_async()
+
+    return HttpResponse("Last child Task ID: {} </br> Observe the celery logs for task execution.".format(task.task_id))
+                                                                                                </p></pre>
+            </div>
+        </li>
+        <!-- Chain task ends -->
+
+
+        <!-- Chain with immutable signatures starts -->
+        <li>
+            <h3>Chain with immutable signatures</h3>
+            <a href="{% url 'chain_task_si' %}" class="btn btn-success">Chain with immutable signatures</a>
+            <h4>Observe the celery logs. Execution is sequential.</h4>
+            <h4><b>si() immutable signature</b> allows tasks to have independent arguments.</h4>
+            <hr>
+            <p><b>in <i>task.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#same as above in Chain task
+                                                                </p></pre>
+            </div>
+            <p><b>in <i>views.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#chain Task, execute sequentially, with immutable signature
+#immutable signature .si() allows to have independent arguments
+def chain_task_si(request):
+    task = chain(add_num.si(4, 5), multiply_num.si(4, 3), divide_num.si(4, 2)).apply_async()
+
+    return HttpResponse("Last child Task ID: {} </br> Observe the celery logs for task execution.".format(task.task_id))
+                                                                                                                </p></pre>
+            </div>
+        </li>
+        <!-- Chain with immutable signatures ends -->
+
+
+        <!-- Group task starts -->
+        <li>
+            <h3>Group task</h3>
+            <a href="{% url 'group_task' %}" class="btn btn-success">Call Group</a>
+            <h4>Observe the celery logs. Execution is parallel.</h4>
+            <h4><b>group()</b> executes the task parallelly.</h4>
+            <hr>
+            <p><b>in <i>task.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#same as above in Chain task
+                                                                </p></pre>
+            </div>
+            <p><b>in <i>views.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#group Task, execute parallelly
+def group_task(request):
+    task = group(add_num.s(4, 5), multiply_num.s(4, 3), divide_num.s(4, 2)).apply_async()
+    
+    return HttpResponse("Last child Task ID: {} </br> Observe the celery logs for task execution.".format(task.id))
+                                                                                                                                    </p></pre>
+            </div>
+        </li>
+        <!-- Group task ends-->
+
+
+        <!-- Group in Chain starts -->
+        <li>
+            <h3>Group in Chain</h3>
+            <a href="{% url 'group_in_chain' %}" class="btn btn-success">Call Group in Chain</a>
+            <h4>Observe the celery logs. Last two task execution is parallel.</h4>
+            <h4><b>chain( other_task.s(), group())</b> executes the group in a chain.</h4>
+            <hr>
+            <p><b>in <i>task.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#same as above in Chain task
+                                                                </p></pre>
+            </div>
+            <p><b>in <i>views.py</i></b></p>
+            <div class="pre-scrollable">
+                <pre><p>
+#group in chain Task
+def group_in_chain(request):
+    task = chain(add_num.s(4, 5), group(multiply_num.s(7), divide_num.s(3))).apply_async()
+
+    return HttpResponse("Last child Task ID: {} </br> Observe the celery logs for task execution.".format(task.id))
+                                                                                                                                                      </p></pre>
+            </div>
+        </li>
+        <!-- Group in Chain ends-->
+
     </ul>
+    <p>Motivation nahi mil rahi, aage aur krne ki.("Lack of motivation" exception, stops this guide here!)</p>
 </div>
 
 {%endblock %}
