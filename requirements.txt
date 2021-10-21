@@ -1,6 +1,6 @@
 amqp==2.5.2
 asgiref==3.2.3
-Babel==2.8.0
+Babel==2.9.1
 billiard==3.6.2.0
 bottle==0.12.18
 celery==4.4.0
